@@ -1,0 +1,15 @@
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="EnterpriseFlow API",
+    description="Enterprise workflow and approval platform",
+    version="0.1.0",
+)
+
+
+@app.get("/api/v1/health", tags=["Health"])
+def health_check() -> dict[str, str]:
+    """
+    Health check endpoint to verify that the API is running.
+    """
+    return {"status": "ok"}
