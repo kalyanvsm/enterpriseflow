@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5432
     postgres_db: str = "enterpriseflow"
+    postgres_test_db: str = "enterpriseflow_test"
     postgres_user: str = "enterpriseflow"
     postgres_password: str
 
@@ -27,6 +28,17 @@ class Settings(BaseSettings):
             host=self.postgres_host,
             port=self.postgres_port,
             database=self.postgres_db,
+        )
+
+    @property
+    def test_database_url(self) -> URL:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.postgres_user,
+            password=self.postgres_password,
+            host=self.postgres_host,
+            port=self.postgres_port,
+            database=self.postgres_test_db,
         )
 
 

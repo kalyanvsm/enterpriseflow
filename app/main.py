@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.api.v1.routes.organizations import router as organizations_router
+
 app = FastAPI(
     title="EnterpriseFlow API",
     description="Enterprise workflow and approval platform",
@@ -13,3 +15,6 @@ def health_check() -> dict[str, str]:
     Health check endpoint to verify that the API is running.
     """
     return {"status": "ok"}
+
+
+app.include_router(organizations_router, prefix="/api/v1")
