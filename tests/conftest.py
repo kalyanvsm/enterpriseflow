@@ -42,15 +42,10 @@ def prepare_test_database(test_engine) -> Iterator[None]:
 
 
 @pytest.fixture
-def client(test_engine) -> Iterator[TestClient]:
-    session_factory = async_sessionmaker(
-        test_engine,
-        expire_on_commit=False,
-        class_=AsyncSession,
-    )
+def client(test_session_factory) -> Iterator[TestClient]:
 
     async def override_get_db() -> AsyncIterator[AsyncSession]:
-        async with session_factory() as session:
+        async with test_session_factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
@@ -72,3 +67,12 @@ def clean_organizations(test_engine) -> Iterator[None]:
     asyncio.run(cleanup())
     yield
     asyncio.run(cleanup())
+
+
+@pytest.fixture
+def test_session_factory(test_engine):
+    return async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )

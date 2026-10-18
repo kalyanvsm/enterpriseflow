@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.v1.routes.organizations import router as organizations_router
+from app.api.v1.routes.users import router as users_router
 
 app = FastAPI(
     title="EnterpriseFlow API",
@@ -18,3 +19,4 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(organizations_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
