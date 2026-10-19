@@ -3,7 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.organization import OrganizationCreate, OrganizationResponse
 from app.services.organization import create_organization, get_organization
 
@@ -31,12 +33,20 @@ async def create_organization_endpoint(
 )
 async def get_organization_endpoint(
     organization_id: UUID,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> OrganizationResponse:
-    organization = await get_organization(session, organization_id)
-    if not organization:
+    if organization_id != current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found",
         )
+    
+    organization = await get_organization(session, organization_id)
+    if organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+    
     return organization
