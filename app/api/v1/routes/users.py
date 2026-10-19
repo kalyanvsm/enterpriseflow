@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.db.session import get_db
-from app.schemas.user import UserCreate, UserResponse
+from app.models.user import User
+from app.schemas.user import UserCreate, UserProfileResponse, UserResponse
 from app.services.user import create_user
 
 router = APIRouter(
@@ -36,3 +38,9 @@ async def create_user_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this email already exists in this organization.",
         ) from exc
+
+@router.get("/me", response_model=UserProfileResponse)
+async def get_my_profile(
+    current_user: User = Depends(get_current_user),
+) -> UserProfileResponse:
+    return current_user

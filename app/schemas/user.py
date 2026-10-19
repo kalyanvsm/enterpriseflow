@@ -19,3 +19,13 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+
+class UserProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    email: EmailStr
+    role: str
+    is_active: bool
+    created_at: datetime
