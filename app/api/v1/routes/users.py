@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_role
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserProfileResponse, UserResponse
@@ -45,3 +45,9 @@ async def get_my_profile(
     current_user: User = Depends(get_current_user),
 ) -> UserProfileResponse:
     return current_user
+
+@router.get("/admin-check")
+async def admin_check(
+    current_user: User = Depends(require_role("admin")),
+) -> dict[str, str]:
+    return {"message": "Admin access granted"}
