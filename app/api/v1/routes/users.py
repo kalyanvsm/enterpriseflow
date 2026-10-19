@@ -39,6 +39,7 @@ async def create_user_endpoint(
             detail="A user with this email already exists in this organization.",
         ) from exc
 
+
 @router.get("/me", response_model=UserProfileResponse)
 async def get_my_profile(
     current_user: User = Depends(get_current_user),

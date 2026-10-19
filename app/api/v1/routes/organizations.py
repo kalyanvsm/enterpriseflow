@@ -41,12 +41,12 @@ async def get_organization_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found",
         )
-    
+
     organization = await get_organization(session, organization_id)
     if organization is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found",
         )
-    
+
     return organization

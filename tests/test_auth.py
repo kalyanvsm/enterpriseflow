@@ -98,9 +98,7 @@ def test_login_rejects_inactive_user(client: TestClient, test_engine) -> None:
         )
         async with factory() as session:
             await session.execute(
-                update(User)
-                .where(User.id == UUID(user_id))
-                .values(is_active=False)
+                update(User).where(User.id == UUID(user_id)).values(is_active=False)
             )
             await session.commit()
 

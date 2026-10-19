@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
+
 class UserProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

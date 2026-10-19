@@ -12,9 +12,10 @@ from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+
 async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        session: AsyncSession = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_db),
 ) -> User:
     credentials_excepton = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

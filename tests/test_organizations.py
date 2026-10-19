@@ -45,7 +45,6 @@ def test_get_existing_organization(client: TestClient) -> None:
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
 
-
     response = client.get(
         f"/api/v1/organizations/{organization_id}",
         headers={"Authorization": f"Bearer {token}"},
@@ -55,9 +54,7 @@ def test_get_existing_organization(client: TestClient) -> None:
     assert response.json()["id"] == organization_id
 
 
-def test_get_missing_organization_returns_404(
-        client: TestClient
-) -> None:
+def test_get_missing_organization_returns_404(client: TestClient) -> None:
     create_response = client.post(
         "/api/v1/organizations",
         json={"name": "Existing Organization"},

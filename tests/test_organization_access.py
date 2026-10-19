@@ -2,9 +2,9 @@ from fastapi.testclient import TestClient
 
 
 def create_organization_and_login(
-        client: TestClient,
-        organization_name: str,
-        email: str,
+    client: TestClient,
+    organization_name: str,
+    email: str,
 ) -> tuple[str, str]:
     organization_response = client.post(
         "/api/v1/organizations",
@@ -34,8 +34,9 @@ def create_organization_and_login(
 
     return organization_id, login_response.json()["access_token"]
 
+
 def test_organization_detail_requires_authentication(
-        client: TestClient,
+    client: TestClient,
 ) -> None:
     organization_response = client.post(
         "/api/v1/organizations",
@@ -47,8 +48,9 @@ def test_organization_detail_requires_authentication(
 
     assert response.status_code == 401
 
+
 def test_user_cannot_read_another_organization(
-        client: TestClient,
+    client: TestClient,
 ) -> None:
     organization_a_id, token_a = create_organization_and_login(
         client,
@@ -70,8 +72,9 @@ def test_user_cannot_read_another_organization(
     assert response.status_code == 404
     assert response.json()["detail"] == "Organization not found"
 
+
 def test_user_can_read_own_organization(
-        client: TestClient,
+    client: TestClient,
 ) -> None:
     organization_id, token = create_organization_and_login(
         client,

@@ -16,6 +16,7 @@ def test_profile_requires_authentication(client: TestClient) -> None:
 
     assert response.status_code == 401
 
+
 def test_profile_returns_authenticated_user(client: TestClient) -> None:
     organization_response = client.post(
         "/api/v1/organizations",
@@ -56,6 +57,7 @@ def test_profile_returns_authenticated_user(client: TestClient) -> None:
     assert profile["organization_id"] == created_user["organization_id"]
     assert "password_hash" not in profile
 
+
 def test_profile_rejects_malformed_token(client: TestClient) -> None:
     response = client.get(
         "/api/v1/users/me",
@@ -63,6 +65,7 @@ def test_profile_rejects_malformed_token(client: TestClient) -> None:
     )
 
     assert response.status_code == 401
+
 
 def test_profile_rejects_expired_token(client: TestClient) -> None:
     settings = get_settings()
@@ -83,9 +86,10 @@ def test_profile_rejects_expired_token(client: TestClient) -> None:
 
     assert response.status_code == 401
 
+
 def test_profile_rejects_inactive_user(
-        client: TestClient,
-        test_engine,
+    client: TestClient,
+    test_engine,
 ) -> None:
     organization_response = client.post(
         "/api/v1/organizations",
@@ -124,9 +128,7 @@ def test_profile_rejects_inactive_user(
         )
         async with factory() as session:
             await session.execute(
-                update(User)
-                .where(User.id == user_id)
-                .values(is_active=False)
+                update(User).where(User.id == user_id).values(is_active=False)
             )
             await session.commit()
 
