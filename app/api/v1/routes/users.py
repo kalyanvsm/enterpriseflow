@@ -46,6 +46,7 @@ async def get_my_profile(
 ) -> UserProfileResponse:
     return current_user
 
+
 @router.get("/admin-check")
 async def admin_check(
     current_user: User = Depends(require_role("admin")),

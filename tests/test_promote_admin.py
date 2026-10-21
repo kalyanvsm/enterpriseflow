@@ -98,6 +98,7 @@ def test_promotion_fails_for_inactive_user(client, test_engine) -> None:
 
     asyncio.run(run_test())
 
+
 def test_promoting_existing_admin_is_safe(client, test_engine) -> None:
     user_id, organization_id = create_user(client, "existing-admin@example.com")
 

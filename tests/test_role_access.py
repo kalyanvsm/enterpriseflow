@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 
 
 def create_user_and_login(
-        client: TestClient,
-        email: str,
+    client: TestClient,
+    email: str,
 ) -> tuple[str, str]:
     organization_response = client.post(
         "/api/v1/organizations",
@@ -33,15 +33,17 @@ def create_user_and_login(
 
     return user_response.json()["id"], login_response.json()["access_token"]
 
+
 def test_admin_endpoint_requires_authentication(
-        client: TestClient,
+    client: TestClient,
 ) -> None:
     response = client.get("/api/v1/users/admin-check")
 
     assert response.status_code == 401
 
+
 def test_employee_cannot_access_admin_endpoint(
-        client: TestClient,
+    client: TestClient,
 ) -> None:
     _, token = create_user_and_login(client, "employee@example.com")
 
@@ -53,9 +55,10 @@ def test_employee_cannot_access_admin_endpoint(
     assert response.status_code == 403
     assert response.json()["detail"] == "Insufficient permissions"
 
+
 def test_admin_can_access_admin_endpoint(
-        client: TestClient,
-        test_engine,
+    client: TestClient,
+    test_engine,
 ) -> None:
     import asyncio
     from uuid import UUID
@@ -75,9 +78,7 @@ def test_admin_can_access_admin_endpoint(
         )
         async with factory() as session:
             await session.execute(
-                update(User)
-                .where(User.id == UUID(user_id))
-                .values(role="admin")
+                update(User).where(User.id == UUID(user_id)).values(role="admin")
             )
             await session.commit()
 
