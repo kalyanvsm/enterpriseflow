@@ -37,6 +37,65 @@ def authenticated_user(test_session_factory):
     return asyncio.run(create_user())
 
 
+@pytest.fixture
+def authenticated_admin(test_session_factory):
+    import asyncio
+
+    async def create_admin():
+        async with test_session_factory() as session:
+            organization = Organization(name="Admin Test Organization")
+            session.add(organization)
+            await session.flush()
+
+            user = User(
+                organization_id=organization.id,
+                email=f"admin-{uuid4()}@example.com",
+                password_hash=hash_password("Admin-password-123"),
+                role="admin",
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            return {
+                "user_id": str(user.id),
+                "organization_id": str(organization.id),
+                "token": create_access_token(str(user.id)),
+            }
+
+    return asyncio.run(create_admin())
+
+
+@pytest.fixture
+def admin_in_same_organization(
+    test_session_factory,
+    authenticated_user: dict,
+):
+    import asyncio
+
+    async def create_admin():
+        async with test_session_factory() as session:
+            user = User(
+                organization_id=authenticated_user["organization_id"],
+                email=f"admin-{uuid4()}@example.com",
+                password_hash=hash_password("Admin-password-123"),
+                role="admin",
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            return {
+                "user_id": str(user.id),
+                "organization_id": authenticated_user["organization_id"],
+                "token": create_access_token(str(user.id)),
+            }
+
+    return asyncio.run(create_admin())
+
+
 def test_create_workflow_request_require_authentication(client: TestClient):
     response = client.post(
         "/api/v1/requests",
@@ -216,3 +275,322 @@ def test_list_workflow_requests_supports_pagination(
 
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_submit_workflow_request_changes_draft_to_pending(
+    client: TestClient,
+    authenticated_user: dict,
+):
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    create_response = client.post(
+        "/api/v1/requests",
+        headers=headers,
+        json={
+            "title": "Submit for approval",
+            "description": "This draft should become pending.",
+        },
+    )
+    assert create_response.status_code == 201
+    request_id = create_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending"
+
+
+def test_submit_workflow_request_cannot_be_repeated(
+    client: TestClient,
+    authenticated_user: dict,
+):
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    create_response = client.post(
+        "/api/v1/requests",
+        headers=headers,
+        json={
+            "title": "Submit only once",
+            "description": "A second submission should conflict.",
+        },
+    )
+    request_id = create_response.json()["id"]
+
+    first_response = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=headers,
+    )
+    second_response = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=headers,
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+
+
+def test_submit_workflow_request_requires_authentication(
+    client: TestClient,
+    authenticated_user: dict,
+):
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    create_response = client.post(
+        "/api/v1/requests",
+        headers=headers,
+        json={
+            "title": "Protected submission",
+            "description": "Submission requires authentication.",
+        },
+    )
+    request_id = create_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+    )
+
+    assert response.status_code == 401
+
+
+def test_user_cannot_submit_another_users_request(
+    client: TestClient,
+    authenticated_user: dict,
+    test_session_factory,
+):
+    import asyncio
+    from uuid import uuid4
+
+    from app.core.security import create_access_token, hash_password
+    from app.models import Organization, User
+
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    create_response = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Owner's private request",
+            "description": "Only the creator should submit this request.",
+        },
+    )
+    assert create_response.status_code == 201
+    request_id = create_response.json()["id"]
+
+    async def create_other_user():
+        async with test_session_factory() as session:
+            organization = Organization(name="Unauthorized Test Organization")
+            session.add(organization)
+            await session.flush()
+
+            user = User(
+                organization_id=organization.id,
+                email=f"unauthorized-{uuid4()}@example.com",
+                password_hash=hash_password("Test-password-123!"),
+                role="employee",
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            return create_access_token(str(user.id))
+
+    other_token = asyncio.run(create_other_user())
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+
+    assert response.status_code == 404
+
+    owner_list = client.get(
+        "/api/v1/requests",
+        headers=owner_headers,
+    )
+    assert owner_list.status_code == 200
+
+    original_request = next(
+        item for item in owner_list.json() if item["id"] == request_id
+    )
+    assert original_request["status"] == "draft"
+
+
+def test_employee_cannot_approve_request(
+    client: TestClient,
+    authenticated_user: dict,
+):
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=headers,
+        json={
+            "title": "Approval permission test",
+            "description": "An employee cannot approve this request.",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_can_approve_pending_request(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Approve this request",
+            "description": "This request should be approved by an admin.",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "approved"
+
+
+def test_admin_can_reject_pending_request(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Reject this request",
+            "description": "This request should be rejected by an admin",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/reject",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
+
+
+def test_admin_cannot_approve_another_organization_request(
+    client: TestClient,
+    authenticated_user: dict,
+    authenticated_admin: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    other_admin_headers = {"Authorization": f"Bearer {authenticated_admin['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Organization isolation test",
+            "description": "Another organization's admin must not approve this.",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=other_admin_headers,
+    )
+
+    assert response.status_code == 404
+
+    listed = client.get("/api/v1/requests", headers=owner_headers)
+    request_data = next(item for item in listed.json() if item["id"] == request_id)
+    assert request_data["status"] == "pending"
+
+
+def test_admin_cannot_decide_request_twice(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Single decision test",
+            "description": "An approved request must not be rejected afterward.",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    approved = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=admin_headers,
+    )
+    assert approved.status_code == 200
+
+    rejected = client.post(
+        f"/api/v1/requests/{request_id}/reject",
+        headers=admin_headers,
+    )
+
+    assert rejected.status_code == 409

@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,3 +45,72 @@ async def list_workflow_requests(
 
     result = await session.scalars(statement)
     return list(result.all())
+
+
+async def submit_workflow_request(
+    session: AsyncSession,
+    request_id: UUID,
+    current_user: User,
+) -> WorkflowRequest:
+    statement = select(WorkflowRequest).where(
+        WorkflowRequest.id == request_id,
+        WorkflowRequest.organization_id == current_user.organization_id,
+        WorkflowRequest.created_by_id == current_user.id,
+    )
+
+    result = await session.scalars(statement)
+    workflow_request = result.one_or_none()
+
+    if workflow_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow request not found",
+        )
+
+    if workflow_request.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only draft requests can be submitted",
+        )
+
+    workflow_request.status = "pending"
+    await session.commit()
+    await session.refresh(workflow_request)
+
+    return workflow_request
+
+
+async def decide_workflow_request(
+    session: AsyncSession,
+    request_id: UUID,
+    current_user: User,
+    decision: str,
+) -> WorkflowRequest:
+    if decision not in {"approved", "rejected"}:
+        raise ValueError("Unsupported workflow decision")
+
+    statement = select(WorkflowRequest).where(
+        WorkflowRequest.id == request_id,
+        WorkflowRequest.organization_id == current_user.organization_id,
+    )
+
+    result = await session.scalars(statement)
+    workflow_request = result.one_or_none()
+
+    if workflow_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow request not found",
+        )
+
+    if workflow_request.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending requests can be approved or rejected",
+        )
+
+    workflow_request.status = decision
+    await session.commit()
+    await session.refresh(workflow_request)
+
+    return workflow_request

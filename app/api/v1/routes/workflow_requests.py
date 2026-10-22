@@ -1,7 +1,9 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_role
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.workflow_request import (
@@ -10,7 +12,9 @@ from app.schemas.workflow_request import (
 )
 from app.services.workflow_request import (
     create_workflow_request,
+    decide_workflow_request,
     list_workflow_requests,
+    submit_workflow_request,
 )
 
 router = APIRouter(
@@ -51,4 +55,54 @@ async def list_workflow_requests_endpoint(
         organization_id=current_user.organization_id,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/{request_id}/submit",
+    response_model=WorkflowRequestResponse,
+)
+async def submit_workflow_request_endpoint(
+    request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> WorkflowRequestResponse:
+    return await submit_workflow_request(
+        session=session,
+        request_id=request_id,
+        current_user=current_user,
+    )
+
+
+@router.post(
+    "/{request_id}/approve",
+    response_model=WorkflowRequestResponse,
+)
+async def approve_workflow_request_endpoint(
+    request_id: UUID,
+    current_user: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_db),
+) -> WorkflowRequestResponse:
+    return await decide_workflow_request(
+        session=session,
+        request_id=request_id,
+        current_user=current_user,
+        decision="approved",
+    )
+
+
+@router.post(
+    "/{request_id}/reject",
+    response_model=WorkflowRequestResponse,
+)
+async def reject_workflow_request_endpoint(
+    request_id: UUID,
+    current_user: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_db),
+) -> WorkflowRequestResponse:
+    return await decide_workflow_request(
+        session=session,
+        request_id=request_id,
+        current_user=current_user,
+        decision="rejected",
     )
