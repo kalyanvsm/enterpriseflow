@@ -883,3 +883,45 @@ def test_audit_history_requires_authentication(client: TestClient):
     )
 
     assert response.status_code == 401
+
+
+def test_admin_cannot_reject_another_organization_request(
+    client: TestClient,
+    authenticated_user: dict,
+    authenticated_admin: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    other_admin_headers = {"Authorization": f"Bearer {authenticated_admin['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Organization rejection isolation test",
+            "description": "Another organization's admin must not reject this.",
+        },
+    )
+    assert created.status_code == 201
+
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.post(
+        f"/api/v1/requests/{request_id}/reject",
+        headers=other_admin_headers,
+    )
+
+    assert response.status_code == 404
+
+    listed = client.get("/api/v1/requests", headers=owner_headers)
+    assert listed.status_code == 200
+
+    request_data = next(
+        item for item in listed.json() if item["id"] == request_id
+    )
+    assert request_data["status"] == "pending"
