@@ -875,3 +875,11 @@ def test_audit_history_hides_other_organizations_requests(
     )
 
     assert response.status_code == 404
+
+
+def test_audit_history_requires_authentication(client: TestClient):
+    response = client.get(
+        f"/api/v1/requests/{uuid4()}/audit-logs",
+    )
+
+    assert response.status_code == 401
