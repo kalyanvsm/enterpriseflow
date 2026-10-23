@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.main import app
 from app.models import Organization, User  # noqa: F401
 from app.models.audit_log import AuditLog
+from app.models.outbox_event import OutboxEvent
 from app.models.workflow_request import WorkflowRequest
 
 
@@ -63,6 +64,7 @@ def client(test_session_factory) -> Iterator[TestClient]:
 def clean_organizations(test_engine) -> Iterator[None]:
     async def cleanup() -> None:
         async with test_engine.begin() as connection:
+            await connection.execute(delete(OutboxEvent))
             await connection.execute(delete(AuditLog))
             await connection.execute(delete(WorkflowRequest))
             await connection.execute(delete(User))

@@ -9,6 +9,7 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.workflow_request import WorkflowRequest
 from app.schemas.workflow_request import WorkflowRequestCreate
+from app.services.outbox import record_outbox_event
 
 
 async def commit_or_rollback(session: AsyncSession) -> None:
@@ -96,6 +97,12 @@ async def submit_workflow_request(
             action="submitted",
             from_status=previous_status,
             to_status="pending",
+        )
+    )
+    session.add(
+        record_outbox_event(
+            workflow_request=workflow_request,
+            event_type="workflow_request.submitted",
         )
     )
 
