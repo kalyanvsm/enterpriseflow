@@ -1,3 +1,27 @@
+
+[project]
+name = "enterpriseflow"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic==1.20.0",
+    "asyncpg==0.32.0",
+    "fastapi==0.143.3",
+    "PyJWT==2.15.1",
+    "pwdlib[argon2]==0.3.1",
+    "pydantic-settings==2.16.0",
+    "SQLAlchemy==2.1.5",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx==0.28.1",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.17.1",
+]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["B008"]
