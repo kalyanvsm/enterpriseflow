@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.workflow_request import WorkflowRequest
 from app.schemas.workflow_request import WorkflowRequestCreate
@@ -52,10 +53,14 @@ async def submit_workflow_request(
     request_id: UUID,
     current_user: User,
 ) -> WorkflowRequest:
-    statement = select(WorkflowRequest).where(
-        WorkflowRequest.id == request_id,
-        WorkflowRequest.organization_id == current_user.organization_id,
-        WorkflowRequest.created_by_id == current_user.id,
+    statement = (
+        select(WorkflowRequest)
+        .where(
+            WorkflowRequest.id == request_id,
+            WorkflowRequest.organization_id == current_user.organization_id,
+            WorkflowRequest.created_by_id == current_user.id,
+        )
+        .with_for_update()
     )
 
     result = await session.scalars(statement)
@@ -73,7 +78,19 @@ async def submit_workflow_request(
             detail="Only draft requests can be submitted",
         )
 
+    previous_status = workflow_request.status
     workflow_request.status = "pending"
+
+    session.add(
+        record_workflow_transition(
+            workflow_request=workflow_request,
+            actor=current_user,
+            action="submitted",
+            from_status=previous_status,
+            to_status="pending",
+        )
+    )
+
     await session.commit()
     await session.refresh(workflow_request)
 
@@ -89,9 +106,13 @@ async def decide_workflow_request(
     if decision not in {"approved", "rejected"}:
         raise ValueError("Unsupported workflow decision")
 
-    statement = select(WorkflowRequest).where(
-        WorkflowRequest.id == request_id,
-        WorkflowRequest.organization_id == current_user.organization_id,
+    statement = (
+        select(WorkflowRequest)
+        .where(
+            WorkflowRequest.id == request_id,
+            WorkflowRequest.organization_id == current_user.organization_id,
+        )
+        .with_for_update()
     )
 
     result = await session.scalars(statement)
@@ -109,8 +130,71 @@ async def decide_workflow_request(
             detail="Only pending requests can be approved or rejected",
         )
 
+    previous_status = workflow_request.status
     workflow_request.status = decision
+
+    session.add(
+        record_workflow_transition(
+            workflow_request=workflow_request,
+            actor=current_user,
+            action=decision,
+            from_status=previous_status,
+            to_status=decision,
+        )
+    )
+
     await session.commit()
     await session.refresh(workflow_request)
 
     return workflow_request
+
+
+def record_workflow_transition(
+    workflow_request: WorkflowRequest,
+    actor: User,
+    action: str,
+    from_status: str,
+    to_status: str,
+) -> AuditLog:
+    return AuditLog(
+        organization_id=workflow_request.organization_id,
+        workflow_request_id=workflow_request.id,
+        actor_user_id=actor.id,
+        action=action,
+        from_status=from_status,
+        to_status=to_status,
+    )
+
+
+async def list_workflow_request_audit_logs(
+    session: AsyncSession,
+    request_id: UUID,
+    organization_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditLog]:
+    request_statement = select(WorkflowRequest.id).where(
+        WorkflowRequest.id == request_id,
+        WorkflowRequest.organization_id == organization_id,
+    )
+    request_result = await session.execute(request_statement)
+
+    if request_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow request not found",
+        )
+
+    statement = (
+        select(AuditLog)
+        .where(
+            AuditLog.workflow_request_id == request_id,
+            AuditLog.organization_id == organization_id,
+        )
+        .order_by(AuditLog.created_at, AuditLog.id)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    result = await session.scalars(statement)
+    return list(result.all())

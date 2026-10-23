@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token, hash_password
 from app.models import Organization, User
+from app.models.audit_log import AuditLog
 
 
 @pytest.fixture
@@ -594,3 +595,283 @@ def test_admin_cannot_decide_request_twice(
     )
 
     assert rejected.status_code == 409
+
+
+def test_submission_creates_audit_log(
+    client: TestClient,
+    authenticated_user: dict,
+    test_session_factory,
+):
+    import asyncio
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=headers,
+        json={
+            "title": "Audit submission test",
+            "description": "Verify the submission audit record.",
+        },
+    )
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=headers,
+    )
+    assert submitted.status_code == 200
+
+    async def read_audit_log():
+        async with test_session_factory() as session:
+            result = await session.scalars(
+                select(AuditLog).where(AuditLog.workflow_request_id == UUID(request_id))
+            )
+            return list(result.all())
+
+    logs = asyncio.run(read_audit_log())
+
+    assert len(logs) == 1
+    assert logs[0].organization_id == UUID(authenticated_user["organization_id"])
+    assert logs[0].actor_user_id == UUID(authenticated_user["user_id"])
+    assert logs[0].action == "submitted"
+    assert logs[0].from_status == "draft"
+    assert logs[0].to_status == "pending"
+
+
+def test_approval_creates_audit_log(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+    test_session_factory,
+):
+    import asyncio
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Audit approval test",
+            "description": "Verify the approval audit record.",
+        },
+    )
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    approved = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=admin_headers,
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+
+    async def read_audit_logs():
+        async with test_session_factory() as session:
+            result = await session.scalars(
+                select(AuditLog)
+                .where(AuditLog.workflow_request_id == UUID(request_id))
+                .order_by(AuditLog.created_at, AuditLog.id)
+            )
+            return list(result.all())
+
+    logs = asyncio.run(read_audit_logs())
+
+    assert len(logs) == 2
+    approval_log = next(log for log in logs if log.action == "approved")
+    assert approval_log.actor_user_id == UUID(admin_in_same_organization["user_id"])
+    assert approval_log.organization_id == UUID(authenticated_user["organization_id"])
+    assert approval_log.from_status == "pending"
+    assert approval_log.to_status == "approved"
+
+
+def test_rejection_creates_audit_log(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+    test_session_factory,
+):
+    import asyncio
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Audit rejection test",
+            "description": "Verify the rejection audit record.",
+        },
+    )
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    rejected = client.post(
+        f"/api/v1/requests/{request_id}/reject",
+        headers=admin_headers,
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+
+    async def read_audit_logs():
+        async with test_session_factory() as session:
+            result = await session.scalars(
+                select(AuditLog)
+                .where(AuditLog.workflow_request_id == UUID(request_id))
+                .order_by(AuditLog.created_at, AuditLog.id)
+            )
+            return list(result.all())
+
+    logs = asyncio.run(read_audit_logs())
+
+    assert len(logs) == 2
+    rejection_log = next(log for log in logs if log.action == "rejected")
+    assert rejection_log.actor_user_id == UUID(admin_in_same_organization["user_id"])
+    assert rejection_log.organization_id == UUID(authenticated_user["organization_id"])
+    assert rejection_log.from_status == "pending"
+    assert rejection_log.to_status == "rejected"
+
+
+def test_audit_history_returns_transitions_in_order(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Audit history test",
+            "description": "Verify the complete transition history.",
+        },
+    )
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    approved = client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=admin_headers,
+    )
+    assert approved.status_code == 200
+
+    response = client.get(
+        f"/api/v1/requests/{request_id}/audit-logs",
+        headers=owner_headers,
+    )
+
+    assert response.status_code == 200
+    logs = response.json()
+    assert [log["action"] for log in logs] == ["submitted", "approved"]
+    assert [log["from_status"] for log in logs] == ["draft", "pending"]
+    assert [log["to_status"] for log in logs] == ["pending", "approved"]
+
+
+def test_audit_history_supports_pagination(
+    client: TestClient,
+    authenticated_user: dict,
+    admin_in_same_organization: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    admin_headers = {"Authorization": f"Bearer {admin_in_same_organization['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Audit pagination test",
+            "description": "Verify paginated audit history.",
+        },
+    )
+    request_id = created.json()["id"]
+
+    client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    client.post(
+        f"/api/v1/requests/{request_id}/approve",
+        headers=admin_headers,
+    )
+
+    first_page = client.get(
+        f"/api/v1/requests/{request_id}/audit-logs?limit=1&offset=0",
+        headers=owner_headers,
+    )
+    second_page = client.get(
+        f"/api/v1/requests/{request_id}/audit-logs?limit=1&offset=1",
+        headers=owner_headers,
+    )
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert len(first_page.json()) == 1
+    assert len(second_page.json()) == 1
+    assert first_page.json()[0]["action"] == "submitted"
+    assert second_page.json()[0]["action"] == "approved"
+
+
+def test_audit_history_hides_other_organizations_requests(
+    client: TestClient,
+    authenticated_user: dict,
+    authenticated_admin: dict,
+):
+    owner_headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
+    other_admin_headers = {"Authorization": f"Bearer {authenticated_admin['token']}"}
+
+    created = client.post(
+        "/api/v1/requests",
+        headers=owner_headers,
+        json={
+            "title": "Private audit history",
+            "description": "Another organization must not see this history.",
+        },
+    )
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+
+    submitted = client.post(
+        f"/api/v1/requests/{request_id}/submit",
+        headers=owner_headers,
+    )
+    assert submitted.status_code == 200
+
+    response = client.get(
+        f"/api/v1/requests/{request_id}/audit-logs",
+        headers=other_admin_headers,
+    )
+
+    assert response.status_code == 404
