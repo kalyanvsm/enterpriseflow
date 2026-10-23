@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit_log import AuditLog
@@ -9,6 +10,13 @@ from app.models.user import User
 from app.models.workflow_request import WorkflowRequest
 from app.schemas.workflow_request import WorkflowRequestCreate
 
+
+async def commit_or_rollback(session: AsyncSession) -> None:
+    try:
+        await session.commit()
+    except SQLAlchemyError:
+        await session.rollback()
+        raise
 
 async def create_workflow_request(
     session: AsyncSession,
@@ -24,7 +32,7 @@ async def create_workflow_request(
     )
 
     session.add(workflow_request)
-    await session.commit()
+    await commit_or_rollback(session)
     await session.refresh(workflow_request)
 
     return workflow_request
@@ -91,7 +99,7 @@ async def submit_workflow_request(
         )
     )
 
-    await session.commit()
+    await commit_or_rollback(session)
     await session.refresh(workflow_request)
 
     return workflow_request
@@ -143,7 +151,7 @@ async def decide_workflow_request(
         )
     )
 
-    await session.commit()
+    await commit_or_rollback(session)
     await session.refresh(workflow_request)
 
     return workflow_request

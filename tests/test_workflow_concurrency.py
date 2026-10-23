@@ -1,16 +1,18 @@
 
 import asyncio
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.security import hash_password
 from app.models import Organization, User
 from app.models.audit_log import AuditLog
 from app.models.workflow_request import WorkflowRequest
-from app.services.workflow_request import decide_workflow_request
+from app.services.workflow_request import commit_or_rollback, decide_workflow_request
 
 
 @pytest.mark.asyncio
@@ -104,3 +106,13 @@ async def test_concurrent_decisions_create_only_one_decision_audit(
             )
         )
         assert decision_count == 1
+
+@pytest.mark.asyncio
+async def test_commit_or_rollback_rolls_back_after_database_error():
+    session = AsyncMock()
+    session.commit.side_effect = SQLAlchemyError("Simulated database failure")
+
+    with pytest.raises(SQLAlchemyError, match="Simulated database failure"):
+        await commit_or_rollback(session)
+
+    session.rollback.assert_awaited_once()
