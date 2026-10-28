@@ -138,6 +138,8 @@ async def test_claim_outbox_event_marks_it_processing(test_session_factory):
 
 @pytest.mark.asyncio
 async def test_claim_reclaims_event_with_expired_lease(test_session_factory):
+    original_claim_token = uuid.uuid4()
+
     async with test_session_factory() as session:
         request = await create_request(session)
         event = OutboxEvent(
@@ -148,6 +150,7 @@ async def test_claim_reclaims_event_with_expired_lease(test_session_factory):
             status="processing",
             attempts=1,
             locked_until=(datetime.now(UTC) - timedelta(minutes=1)),
+            claim_token=original_claim_token,
         )
         session.add(event)
         await session.commit()
@@ -162,6 +165,21 @@ async def test_claim_reclaims_event_with_expired_lease(test_session_factory):
         assert claimed[0].attempts == 2
         assert claimed[0].locked_until is not None
         assert claimed[0].claim_token is not None
+        assert claimed[0].claim_token != original_claim_token
+
+    async with test_session_factory() as session:
+        stale_delivery = await mark_outbox_event_delivered(
+            session,
+            event_id,
+            claim_token=original_claim_token,
+        )
+
+        assert stale_delivery is False
+
+        saved = await session.get(OutboxEvent, event_id)
+        assert saved is not None
+        assert saved.status == "processing"
+        assert saved.attempts == 2
 
 
 @pytest.mark.asyncio
