@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from time import perf_counter
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,12 +23,17 @@ async def dispatch_outbox_events(
     retry_delay: timedelta = timedelta(minutes=1),
 ) -> int:
     """Deliver a batch of outbox events and return the number delivered."""
+    started_at = perf_counter()
     events = await claim_outbox_events(session, batch_size=batch_size)
     delivered_count = 0
+    delivery_failed_count = 0
+    retry_scheduled_count = 0
+    claim_conflict_count = 0
 
     for event in events:
         claim_token = event.claim_token
         if claim_token is None:
+            claim_conflict_count += 1
             logger.error(
                 "Claimed outbox event has no claim token",
                 extra={"event_id": str(event.id)},
@@ -37,6 +43,7 @@ async def dispatch_outbox_events(
         try:
             await notifier.deliver(event)
         except Exception as exc:
+            delivery_failed_count += 1
             logger.exception(
                 "Outbox event delivery failed",
                 extra={
@@ -44,7 +51,7 @@ async def dispatch_outbox_events(
                     "event_type": event.event_type,
                 },
             )
-            await schedule_outbox_retry(
+            retry_scheduled = await schedule_outbox_retry(
                 session,
                 event.id,
                 claim_token=claim_token,
@@ -52,6 +59,8 @@ async def dispatch_outbox_events(
                 max_attempts=max_attempts,
                 retry_delay=retry_delay,
             )
+            if retry_scheduled:
+                retry_scheduled_count += 1
         else:
             marked_delivered = await mark_outbox_event_delivered(
                 session,
@@ -61,9 +70,22 @@ async def dispatch_outbox_events(
             if marked_delivered:
                 delivered_count += 1
             else:
+                claim_conflict_count += 1
                 logger.warning(
                     "Outbox event claim expired before delivery was recorded",
                     extra={"event_id": str(event.id)},
                 )
+
+    logger.info(
+        "Outbox worker batch completed",
+        extra={
+            "claimed_count": len(events),
+            "delivered_count": delivered_count,
+            "delivery_failed_count": delivery_failed_count,
+            "retry_scheduled_count": retry_scheduled_count,
+            "claim_conflict_count": claim_conflict_count,
+            "duration_ms": round((perf_counter() - started_at) * 1000, 2),
+        },
+    )
 
     return delivered_count

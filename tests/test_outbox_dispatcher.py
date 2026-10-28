@@ -155,3 +155,57 @@ async def test_dispatch_propagates_retry_scheduling_failure(
 
     with pytest.raises(RuntimeError, match="database unavailable"):
         await dispatch_outbox_events(session, notifier)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_batch_metrics_without_event_payload(
+    monkeypatch,
+    claimed_event,
+    caplog,
+):
+    import logging
+
+    session = AsyncMock()
+    notifier = Mock()
+    notifier.deliver = AsyncMock()
+
+    claimed_event.payload = {"secret_content": "do-not-log-this"}
+    claimed_event.event_type = "workflow_request.submitted"
+
+    async def claim_events(*args, **kwargs):
+        return [claimed_event]
+
+    mark_delivered = AsyncMock(return_value=True)
+
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.claim_outbox_events",
+        claim_events,
+    )
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.mark_outbox_event_delivered",
+        mark_delivered,
+    )
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="app.services.outbox_dispatcher",
+    ):
+        result = await dispatch_outbox_events(session, notifier)
+
+    assert result == 1
+
+    batch_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Outbox worker batch completed"
+    )
+
+    assert batch_record.claimed_count == 1
+    assert batch_record.delivered_count == 1
+    assert batch_record.delivery_failed_count == 0
+    assert batch_record.retry_scheduled_count == 0
+    assert batch_record.claim_conflict_count == 0
+    assert batch_record.duration_ms >= 0
+
+    assert "do-not-log-this" not in caplog.text
+    assert "secret_content" not in caplog.text
