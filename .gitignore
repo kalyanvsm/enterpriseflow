@@ -8,3 +8,6 @@ __pycache__/
 .coverage
 htmlcov/
 .vscode/
+
+# Python packaging artifacts
+*.egg-info/
