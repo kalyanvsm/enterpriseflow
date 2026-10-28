@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.outbox_event import OutboxEvent
 from app.models.workflow_request import WorkflowRequest
+from app.services.outbox_results import RetryOutcome
 
 
 def record_outbox_event(
@@ -112,7 +113,7 @@ async def schedule_outbox_retry(
     error: str,
     max_attempts: int = 5,
     retry_delay: timedelta = timedelta(minutes=1),
-) -> bool:
+) -> RetryOutcome:
     """Schedule a retry, or mark the event failed after max attempts."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
@@ -131,7 +132,7 @@ async def schedule_outbox_retry(
     )
 
     if event is None:
-        return False
+        return RetryOutcome.STALE_CLAIM
 
     event.last_error = error[:2000]
     event.locked_until = None
@@ -139,9 +140,11 @@ async def schedule_outbox_retry(
 
     if event.attempts >= max_attempts:
         event.status = "failed"
+        outcome = RetryOutcome.RETRY_EXHAUSTED
     else:
         event.status = "pending"
         event.available_at = datetime.now(UTC) + retry_delay
+        outcome = RetryOutcome.RETRY_SCHEDULED
 
     await session.commit()
-    return True
+    return outcome

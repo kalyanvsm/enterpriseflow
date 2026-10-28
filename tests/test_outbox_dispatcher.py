@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.services.outbox_dispatcher import dispatch_outbox_events
+from app.services.outbox_results import RetryOutcome
 
 
 @pytest.fixture
@@ -69,7 +70,7 @@ async def test_dispatch_schedules_retry_after_delivery_error(
         return [claimed_event]
 
     mark_delivered = AsyncMock()
-    schedule_retry = AsyncMock(return_value=True)
+    schedule_retry = AsyncMock(return_value=RetryOutcome.RETRY_SCHEDULED)
 
     monkeypatch.setattr(
         "app.services.outbox_dispatcher.claim_outbox_events",
@@ -209,3 +210,97 @@ async def test_dispatch_logs_batch_metrics_without_event_payload(
 
     assert "do-not-log-this" not in caplog.text
     assert "secret_content" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_retry_exhaustion(
+    monkeypatch,
+    claimed_event,
+    caplog,
+):
+    import logging
+
+    session = AsyncMock()
+    notifier = Mock()
+    notifier.deliver = AsyncMock(side_effect=RuntimeError("permanent failure"))
+
+    async def claim_events(*args, **kwargs):
+        return [claimed_event]
+
+    schedule_retry = AsyncMock(return_value=RetryOutcome.RETRY_EXHAUSTED)
+
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.claim_outbox_events",
+        claim_events,
+    )
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.schedule_outbox_retry",
+        schedule_retry,
+    )
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="app.services.outbox_dispatcher",
+    ):
+        result = await dispatch_outbox_events(session, notifier)
+
+    assert result == 0
+
+    batch_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Outbox worker batch completed"
+    )
+    assert batch_record.claimed_count == 1
+    assert batch_record.delivered_count == 0
+    assert batch_record.delivery_failed_count == 1
+    assert batch_record.retry_scheduled_count == 0
+    assert batch_record.retry_exhausted_count == 1
+    assert batch_record.claim_conflict_count == 0
+
+
+@pytest.mark.asyncio
+async def test_dispatch_logs_stale_claim_after_delivery_failure(
+    monkeypatch,
+    claimed_event,
+    caplog,
+):
+    import logging
+
+    session = AsyncMock()
+    notifier = Mock()
+    notifier.deliver = AsyncMock(side_effect=RuntimeError("temporary failure"))
+
+    async def claim_events(*args, **kwargs):
+        return [claimed_event]
+
+    schedule_retry = AsyncMock(return_value=RetryOutcome.STALE_CLAIM)
+
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.claim_outbox_events",
+        claim_events,
+    )
+    monkeypatch.setattr(
+        "app.services.outbox_dispatcher.schedule_outbox_retry",
+        schedule_retry,
+    )
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="app.services.outbox_dispatcher",
+    ):
+        result = await dispatch_outbox_events(session, notifier)
+
+    assert result == 0
+
+    batch_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Outbox worker batch completed"
+    )
+    assert batch_record.claimed_count == 1
+    assert batch_record.delivered_count == 0
+    assert batch_record.delivery_failed_count == 1
+    assert batch_record.retry_scheduled_count == 0
+    assert batch_record.retry_exhausted_count == 0
+    assert batch_record.claim_conflict_count == 1

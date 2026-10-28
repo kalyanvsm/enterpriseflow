@@ -10,6 +10,7 @@ from app.services.outbox import (
     mark_outbox_event_delivered,
     schedule_outbox_retry,
 )
+from app.services.outbox_results import RetryOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def dispatch_outbox_events(
     delivered_count = 0
     delivery_failed_count = 0
     retry_scheduled_count = 0
+    retry_exhausted_count = 0
     claim_conflict_count = 0
 
     for event in events:
@@ -59,8 +61,12 @@ async def dispatch_outbox_events(
                 max_attempts=max_attempts,
                 retry_delay=retry_delay,
             )
-            if retry_scheduled:
+            if retry_scheduled == RetryOutcome.RETRY_SCHEDULED:
                 retry_scheduled_count += 1
+            elif retry_scheduled == RetryOutcome.RETRY_EXHAUSTED:
+                retry_exhausted_count += 1
+            elif retry_scheduled == RetryOutcome.STALE_CLAIM:
+                claim_conflict_count += 1
         else:
             marked_delivered = await mark_outbox_event_delivered(
                 session,
@@ -83,6 +89,7 @@ async def dispatch_outbox_events(
             "delivered_count": delivered_count,
             "delivery_failed_count": delivery_failed_count,
             "retry_scheduled_count": retry_scheduled_count,
+            "retry_exhausted_count": retry_exhausted_count,
             "claim_conflict_count": claim_conflict_count,
             "duration_ms": round((perf_counter() - started_at) * 1000, 2),
         },

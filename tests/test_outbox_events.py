@@ -13,6 +13,7 @@ from app.services.outbox import (
     mark_outbox_event_delivered,
     schedule_outbox_retry,
 )
+from app.services.outbox_results import RetryOutcome
 
 
 async def create_request(session: AsyncSession) -> WorkflowRequest:
@@ -326,7 +327,7 @@ async def test_schedule_outbox_retry(test_session_factory):
             max_attempts=5,
             retry_delay=timedelta(minutes=2),
         )
-        assert result is True
+        assert result == RetryOutcome.RETRY_SCHEDULED
 
     async with test_session_factory() as session:
         saved = await session.get(OutboxEvent, event_id)
@@ -369,7 +370,7 @@ async def test_retry_marks_event_failed_at_max_attempts(
             error="Permanent failure after retries",
             max_attempts=5,
         )
-        assert result is True
+        assert result == RetryOutcome.RETRY_EXHAUSTED
 
     async with test_session_factory() as session:
         saved = await session.get(OutboxEvent, event_id)
