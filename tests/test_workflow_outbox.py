@@ -44,9 +44,7 @@ def test_submitting_request_records_outbox_event(
     authenticated_user,
     test_session_factory,
 ):
-    headers = {
-        "Authorization": f"Bearer {authenticated_user['token']}"
-    }
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
 
     created = client.post(
         "/api/v1/requests",
@@ -91,9 +89,7 @@ def test_failed_outbox_insert_rolls_back_submission(
     authenticated_user,
     test_session_factory,
 ):
-    headers = {
-        "Authorization": f"Bearer {authenticated_user['token']}"
-    }
+    headers = {"Authorization": f"Bearer {authenticated_user['token']}"}
 
     created = client.post(
         "/api/v1/requests",
@@ -156,9 +152,7 @@ def test_failed_outbox_insert_rolls_back_submission(
     async def inspect_database():
         async with test_session_factory() as session:
             request = await session.scalar(
-                select(WorkflowRequest).where(
-                    WorkflowRequest.id == request_id
-                )
+                select(WorkflowRequest).where(WorkflowRequest.id == request_id)
             )
             audit_logs = (
                 await session.scalars(

@@ -921,7 +921,5 @@ def test_admin_cannot_reject_another_organization_request(
     listed = client.get("/api/v1/requests", headers=owner_headers)
     assert listed.status_code == 200
 
-    request_data = next(
-        item for item in listed.json() if item["id"] == request_id
-    )
+    request_data = next(item for item in listed.json() if item["id"] == request_id)
     assert request_data["status"] == "pending"

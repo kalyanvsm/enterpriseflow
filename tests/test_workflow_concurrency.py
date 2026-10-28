@@ -1,4 +1,3 @@
-
 import asyncio
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -106,6 +105,7 @@ async def test_concurrent_decisions_create_only_one_decision_audit(
             )
         )
         assert decision_count == 1
+
 
 @pytest.mark.asyncio
 async def test_commit_or_rollback_rolls_back_after_database_error():

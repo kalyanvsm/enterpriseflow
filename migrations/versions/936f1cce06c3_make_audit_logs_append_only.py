@@ -1,4 +1,3 @@
-
 """make audit logs append only
 
 Revision ID: 936f1cce06c3
@@ -41,9 +40,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP TRIGGER IF EXISTS audit_logs_append_only ON audit_logs"
-    )
-    op.execute(
-        "DROP FUNCTION IF EXISTS prevent_audit_log_mutation()"
-    )
+    op.execute("DROP TRIGGER IF EXISTS audit_logs_append_only ON audit_logs")
+    op.execute("DROP FUNCTION IF EXISTS prevent_audit_log_mutation()")

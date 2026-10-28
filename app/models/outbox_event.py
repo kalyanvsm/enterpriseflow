@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import datetime
 from typing import Any
@@ -82,6 +81,10 @@ class OutboxEvent(Base):
     )
     locked_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

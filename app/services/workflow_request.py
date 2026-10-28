@@ -19,6 +19,7 @@ async def commit_or_rollback(session: AsyncSession) -> None:
         await session.rollback()
         raise
 
+
 async def create_workflow_request(
     session: AsyncSession,
     request_data: WorkflowRequestCreate,
