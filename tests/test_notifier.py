@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from app.models.outbox_event import OutboxEvent
-from app.services.notifier import LoggingEventNotifier
+from app.services.notifier import LoggingEventNotifier, get_idempotency_key
 
 
 @pytest.mark.asyncio
@@ -61,3 +61,14 @@ async def test_logging_notifier_uses_stable_event_id_on_repeated_delivery(
     assert len(records) == 2
     assert records[0].event_id == str(event.id)
     assert records[1].event_id == str(event.id)
+
+
+def test_idempotency_key_is_stable_for_the_same_event():
+    event = Mock(spec=OutboxEvent)
+    event.id = uuid.uuid4()
+
+    first_key = get_idempotency_key(event)
+    second_key = get_idempotency_key(event)
+
+    assert first_key == second_key
+    assert first_key == str(event.id)

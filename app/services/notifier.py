@@ -6,6 +6,11 @@ from app.models.outbox_event import OutboxEvent
 logger = logging.getLogger(__name__)
 
 
+def get_idempotency_key(event: OutboxEvent) -> str:
+    """Return a stable idempotency key for an outbox event."""
+    return str(event.id)
+
+
 class EventNotifier(Protocol):
     """Interface for delivering outbox events."""
 
