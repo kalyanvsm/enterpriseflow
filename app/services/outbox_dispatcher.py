@@ -63,10 +63,35 @@ async def dispatch_outbox_events(
             )
             if retry_scheduled == RetryOutcome.RETRY_SCHEDULED:
                 retry_scheduled_count += 1
+                logger.warning(
+                    "Outbox event retry scheduled",
+                    extra={
+                        "event_id": str(event.id),
+                        "event_type": event.event_type,
+                        "attempts": event.attempts,
+                        "max_attempts": max_attempts,
+                    },
+                )
             elif retry_scheduled == RetryOutcome.RETRY_EXHAUSTED:
                 retry_exhausted_count += 1
+                logger.error(
+                    "Outbox event retries exhausted",
+                    extra={
+                        "event_id": str(event.id),
+                        "event_type": event.event_type,
+                        "attempts": event.attempts,
+                        "max_attempts": max_attempts,
+                    },
+                )
             elif retry_scheduled == RetryOutcome.STALE_CLAIM:
                 claim_conflict_count += 1
+                logger.warning(
+                    "Outbox event retry skipped due to stale claim",
+                    extra={
+                        "event_id": str(event.id),
+                        "event_type": event.event_type,
+                    },
+                )
         else:
             marked_delivered = await mark_outbox_event_delivered(
                 session,

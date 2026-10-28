@@ -258,6 +258,16 @@ async def test_dispatch_logs_retry_exhaustion(
     assert batch_record.retry_exhausted_count == 1
     assert batch_record.claim_conflict_count == 0
 
+    event_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Outbox event retries exhausted"
+    )
+    assert event_record.event_id == str(claimed_event.id)
+    assert event_record.event_type == claimed_event.event_type
+    assert event_record.max_attempts == 5
+    assert "payload" not in event_record.__dict__
+
 
 @pytest.mark.asyncio
 async def test_dispatch_logs_stale_claim_after_delivery_failure(
@@ -304,3 +314,12 @@ async def test_dispatch_logs_stale_claim_after_delivery_failure(
     assert batch_record.retry_scheduled_count == 0
     assert batch_record.retry_exhausted_count == 0
     assert batch_record.claim_conflict_count == 1
+
+    event_record = next(
+        record
+        for record in caplog.records
+        if record.message == "Outbox event retry skipped due to stale claim"
+    )
+    assert event_record.event_id == str(claimed_event.id)
+    assert event_record.event_type == claimed_event.event_type
+    assert "payload" not in event_record.__dict__
