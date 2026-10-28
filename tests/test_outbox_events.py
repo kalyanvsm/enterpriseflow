@@ -161,6 +161,7 @@ async def test_claim_reclaims_event_with_expired_lease(test_session_factory):
         assert claimed[0].status == "processing"
         assert claimed[0].attempts == 2
         assert claimed[0].locked_until is not None
+        assert claimed[0].claim_token is not None
 
 
 @pytest.mark.asyncio
