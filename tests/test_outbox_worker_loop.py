@@ -67,3 +67,27 @@ async def test_worker_loop_stops_when_cancelled(monkeypatch):
             AsyncMock(),
             poll_interval=0.01,
         )
+
+
+@pytest.mark.asyncio
+async def test_worker_logs_stopped_when_cancelled(monkeypatch, caplog):
+    import logging
+
+    async def fake_run_batch(notifier, *, batch_size):
+        return 0
+
+    async def fake_sleep(_interval):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(outbox_worker, "run_outbox_batch", fake_run_batch)
+    monkeypatch.setattr(outbox_worker.asyncio, "sleep", fake_sleep)
+
+    with caplog.at_level(logging.INFO, logger="app.workers.outbox_worker"):
+        with pytest.raises(asyncio.CancelledError):
+            await outbox_worker.run_outbox_loop(
+                AsyncMock(),
+                poll_interval=0.01,
+            )
+
+    assert "Outbox worker started" in caplog.messages
+    assert "Outbox worker stopped" in caplog.messages
