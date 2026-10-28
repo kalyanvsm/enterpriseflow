@@ -435,3 +435,60 @@ async def test_stale_worker_cannot_mark_reclaimed_event_delivered(
             claim_token=new_token,
         )
         assert result is True
+
+
+@pytest.mark.asyncio
+async def test_stale_worker_cannot_schedule_retry_for_reclaimed_event(
+    test_session_factory,
+):
+    async with test_session_factory() as session:
+        request = await create_request(session)
+        event = OutboxEvent(
+            organization_id=request.organization_id,
+            workflow_request_id=request.id,
+            event_type="workflow_request.submitted",
+            payload={"request_id": str(request.id)},
+        )
+        session.add(event)
+        await session.commit()
+        event_id = event.id
+
+    # Worker 1 claims the event.
+    async with test_session_factory() as session:
+        first_claim = await claim_outbox_events(session)
+        assert len(first_claim) == 1
+        old_token = first_claim[0].claim_token
+        assert old_token is not None
+
+    # Simulate the first worker's lease expiring.
+    async with test_session_factory() as session:
+        event = await session.get(OutboxEvent, event_id)
+        assert event is not None
+        event.locked_until = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    # Worker 2 reclaims the event with a new token.
+    async with test_session_factory() as session:
+        second_claim = await claim_outbox_events(session)
+        assert len(second_claim) == 1
+        new_token = second_claim[0].claim_token
+        assert new_token is not None
+        assert new_token != old_token
+
+    # Worker 1 must not alter the event using its stale token.
+    async with test_session_factory() as session:
+        result = await schedule_outbox_retry(
+            session,
+            event_id,
+            claim_token=old_token,
+            error="Stale worker failure",
+        )
+        assert result == RetryOutcome.STALE_CLAIM
+
+    # Verify worker 2 still owns the processing event.
+    async with test_session_factory() as session:
+        saved = await session.get(OutboxEvent, event_id)
+        assert saved is not None
+        assert saved.status == "processing"
+        assert saved.claim_token == new_token
+        assert saved.last_error is None
