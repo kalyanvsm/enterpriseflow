@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -34,5 +35,7 @@ async def test_run_outbox_batch_uses_session_and_dispatches(monkeypatch):
         session,
         notifier,
         batch_size=7,
+        max_attempts=5,
+        retry_delay=timedelta(seconds=60),
     )
     session_context.__aexit__.assert_awaited_once()
