@@ -278,6 +278,28 @@ def test_list_workflow_requests_supports_pagination(
     assert len(response.json()) == 1
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?limit=0",
+        "?limit=101",
+        "?limit=-1",
+        "?offset=-1",
+    ],
+)
+def test_list_workflow_requests_rejects_invalid_pagination(
+    client: TestClient,
+    authenticated_user: dict,
+    query: str,
+) -> None:
+    response = client.get(
+        f"/api/v1/requests{query}",
+        headers={"Authorization": f"Bearer {authenticated_user['token']}"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_submit_workflow_request_changes_draft_to_pending(
     client: TestClient,
     authenticated_user: dict,
@@ -883,6 +905,28 @@ def test_audit_history_requires_authentication(client: TestClient):
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?limit=0",
+        "?limit=101",
+        "?limit=-1",
+        "?offset=-1",
+    ],
+)
+def test_audit_history_rejects_invalid_pagination(
+    client: TestClient,
+    authenticated_user: dict,
+    query: str,
+) -> None:
+    response = client.get(
+        f"/api/v1/requests/{uuid4()}/audit-logs{query}",
+        headers={"Authorization": f"Bearer {authenticated_user['token']}"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_admin_cannot_reject_another_organization_request(
