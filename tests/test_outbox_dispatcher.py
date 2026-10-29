@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.services.notifier import get_idempotency_key
 from app.services.outbox_dispatcher import dispatch_outbox_events
 from app.services.outbox_results import RetryOutcome
 
@@ -48,7 +49,9 @@ async def test_dispatch_marks_successful_delivery(
     result = await dispatch_outbox_events(session, notifier)
 
     assert result == 1
-    notifier.deliver.assert_awaited_once_with(claimed_event)
+    notifier.deliver.assert_awaited_once_with(
+        claimed_event, idempotency_key=get_idempotency_key(claimed_event)
+    )
     mark_delivered.assert_awaited_once_with(
         session,
         claimed_event.id,

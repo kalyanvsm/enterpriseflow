@@ -14,15 +14,25 @@ def get_idempotency_key(event: OutboxEvent) -> str:
 class EventNotifier(Protocol):
     """Interface for delivering outbox events."""
 
-    async def deliver(self, event: OutboxEvent) -> None:
-        """Deliver an event or raise an exception if delivery fails."""
+    async def deliver(
+        self,
+        event: OutboxEvent,
+        *,
+        idempotency_key: str,
+    ) -> None:
+        """Deliver an event using a provider-supported idempotency key."""
         ...
 
 
 class LoggingEventNotifier:
     """Development notifier that logs events instead of sending them."""
 
-    async def deliver(self, event: OutboxEvent) -> None:
+    async def deliver(
+        self,
+        event: OutboxEvent,
+        *,
+        idempotency_key: str,
+    ) -> None:
         logger.info(
             "Outbox event delivered to development notifier",
             extra={
@@ -30,5 +40,6 @@ class LoggingEventNotifier:
                 "event_type": event.event_type,
                 "organization_id": str(event.organization_id),
                 "workflow_request_id": str(event.workflow_request_id),
+                "idempotency_key": idempotency_key,
             },
         )

@@ -18,9 +18,10 @@ async def test_logging_notifier_logs_event_metadata(caplog):
     event.payload = {"secret": "must-not-be-logged"}
 
     notifier = LoggingEventNotifier()
+    idempotency_key = get_idempotency_key(event)
 
     with caplog.at_level(logging.INFO, logger="app.services.notifier"):
-        await notifier.deliver(event)
+        await notifier.deliver(event, idempotency_key=idempotency_key)
 
     assert len(caplog.records) == 1
 
@@ -31,6 +32,7 @@ async def test_logging_notifier_logs_event_metadata(caplog):
     assert record.event_type == event.event_type
     assert record.organization_id == str(event.organization_id)
     assert record.workflow_request_id == str(event.workflow_request_id)
+    assert record.idempotency_key == idempotency_key
     assert "payload" not in record.__dict__
     assert "must-not-be-logged" not in record.getMessage()
 
@@ -47,10 +49,11 @@ async def test_logging_notifier_uses_stable_event_id_on_repeated_delivery(
     event.payload = {"title": "Example request"}
 
     notifier = LoggingEventNotifier()
+    idempotency_key = get_idempotency_key(event)
 
     with caplog.at_level(logging.INFO, logger="app.services.notifier"):
-        await notifier.deliver(event)
-        await notifier.deliver(event)
+        await notifier.deliver(event, idempotency_key=idempotency_key)
+        await notifier.deliver(event, idempotency_key=idempotency_key)
 
     records = [
         record
@@ -61,6 +64,8 @@ async def test_logging_notifier_uses_stable_event_id_on_repeated_delivery(
     assert len(records) == 2
     assert records[0].event_id == str(event.id)
     assert records[1].event_id == str(event.id)
+    assert records[0].idempotency_key == idempotency_key
+    assert records[1].idempotency_key == idempotency_key
 
 
 def test_idempotency_key_is_stable_for_the_same_event():

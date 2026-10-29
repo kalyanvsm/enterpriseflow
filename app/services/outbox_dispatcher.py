@@ -4,7 +4,7 @@ from time import perf_counter
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.notifier import EventNotifier
+from app.services.notifier import EventNotifier, get_idempotency_key
 from app.services.outbox import (
     claim_outbox_events,
     mark_outbox_event_delivered,
@@ -43,7 +43,7 @@ async def dispatch_outbox_events(
             continue
 
         try:
-            await notifier.deliver(event)
+            await notifier.deliver(event, idempotency_key=get_idempotency_key(event))
         except Exception as exc:
             delivery_failed_count += 1
             logger.exception(
