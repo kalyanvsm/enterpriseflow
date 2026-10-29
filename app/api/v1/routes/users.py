@@ -21,10 +21,16 @@ router = APIRouter(
 )
 async def create_user_endpoint(
     user_data: UserCreate,
+    current_user: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_db),
 ) -> UserResponse:
+
     try:
-        return await create_user(session, user_data)
+        return await create_user(
+            session,
+            user_data,
+            organization_id=current_user.organization_id,
+        )
     except ValueError as exc:
         if str(exc) == "Organization not found":
             raise HTTPException(

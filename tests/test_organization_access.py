@@ -1,38 +1,35 @@
+import asyncio
+
 from fastapi.testclient import TestClient
+
+from app.core.security import create_access_token, hash_password
+from app.models import Organization, User
 
 
 def create_organization_and_login(
-    client: TestClient,
+    test_session_factory,
     organization_name: str,
     email: str,
 ) -> tuple[str, str]:
-    organization_response = client.post(
-        "/api/v1/organizations",
-        json={"name": organization_name},
-    )
-    assert organization_response.status_code == 201
-    organization_id = organization_response.json()["id"]
+    async def create() -> tuple[str, str]:
+        async with test_session_factory() as session:
+            organization = Organization(name=organization_name)
+            session.add(organization)
+            await session.flush()
 
-    user_response = client.post(
-        "/api/v1/users",
-        json={
-            "organization_id": organization_id,
-            "email": email,
-            "password": "StrongPassword1234567890!",
-        },
-    )
-    assert user_response.status_code == 201
+            user = User(
+                organization_id=organization.id,
+                email=email.lower(),
+                password_hash=hash_password("StrongPassword1234567890!"),
+                role="employee",
+                is_active=True,
+            )
+            session.add(user)
+            await session.commit()
 
-    login_response = client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": email,
-            "password": "StrongPassword1234567890!",
-        },
-    )
-    assert login_response.status_code == 200
+            return str(organization.id), create_access_token(str(user.id))
 
-    return organization_id, login_response.json()["access_token"]
+    return asyncio.run(create())
 
 
 def test_organization_detail_requires_authentication(
@@ -42,6 +39,7 @@ def test_organization_detail_requires_authentication(
         "/api/v1/organizations",
         json={"name": "Private Organization"},
     )
+    assert organization_response.status_code == 201
     organization_id = organization_response.json()["id"]
 
     response = client.get(f"/api/v1/organizations/{organization_id}")
@@ -51,14 +49,15 @@ def test_organization_detail_requires_authentication(
 
 def test_user_cannot_read_another_organization(
     client: TestClient,
+    test_session_factory,
 ) -> None:
     organization_a_id, token_a = create_organization_and_login(
-        client,
+        test_session_factory,
         "Organization Alpha",
         "alpha@example.com",
     )
     organization_b_id, _ = create_organization_and_login(
-        client,
+        test_session_factory,
         "Organization Beta",
         "beta@example.com",
     )
@@ -75,9 +74,10 @@ def test_user_cannot_read_another_organization(
 
 def test_user_can_read_own_organization(
     client: TestClient,
+    test_session_factory,
 ) -> None:
     organization_id, token = create_organization_and_login(
-        client,
+        test_session_factory,
         "My Organization",
         "owner@example.com",
     )

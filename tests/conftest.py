@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator, Iterator
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
+from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -82,3 +84,37 @@ def test_session_factory(test_engine):
         class_=AsyncSession,
         expire_on_commit=False,
     )
+
+
+@pytest.fixture
+def create_test_user(test_session_factory):
+    def create_user(*, role: str = "employee", email: str | None = None):
+        actual_email = email or f"{role}-{uuid4()}@example.com"
+
+        async def create() -> dict[str, str]:
+            async with test_session_factory() as session:
+                organization = Organization(name=f"Test organization {uuid4()}")
+                session.add(organization)
+                await session.flush()
+
+                user = User(
+                    organization_id=organization.id,
+                    email=actual_email,
+                    password_hash=hash_password("Test-password-123!"),
+                    role=role,
+                    is_active=True,
+                )
+                session.add(user)
+                await session.commit()
+                await session.refresh(user)
+
+                return {
+                    "user_id": str(user.id),
+                    "organization_id": str(organization.id),
+                    "email": actual_email,
+                    "token": create_access_token(str(user.id)),
+                }
+
+        return asyncio.run(create())
+
+    return create_user

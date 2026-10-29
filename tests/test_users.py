@@ -1,5 +1,4 @@
 import asyncio
-from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
@@ -7,25 +6,26 @@ from sqlalchemy import select
 
 from app.models.user import User
 
-
-def create_organization(client: TestClient) -> str:
-    response = client.post(
-        "/api/v1/organizations",
-        json={"name": "Test Organization"},
-    )
-    assert response.status_code == 201
-    return response.json()["id"]
+PASSWORD = "StrongPassword1234567890!"
 
 
-def test_create_user(client: TestClient) -> None:
-    organization_id = create_organization(client)
+def admin_headers(create_test_user) -> tuple[dict[str, str], str]:
+    admin = create_test_user(role="admin")
+    return {"Authorization": f"Bearer {admin['token']}"}, admin["organization_id"]
+
+
+def test_create_user(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, organization_id = admin_headers(create_test_user)
 
     response = client.post(
         "/api/v1/users",
+        headers=headers,
         json={
-            "organization_id": organization_id,
             "email": "alice@example.com",
-            "password": "StrongPassowrd1234567890!",
+            "password": PASSWORD,
         },
     )
 
@@ -41,47 +41,104 @@ def test_create_user(client: TestClient) -> None:
     assert "password_hash" not in data
 
 
-def test_create_user_for_missing_organization_returns_404(
-    client: TestClient,
-) -> None:
+def test_create_user_requires_authentication(client: TestClient) -> None:
     response = client.post(
         "/api/v1/users",
         json={
-            "organization_id": str(uuid4()),
             "email": "alice@example.com",
-            "password": "StrongPassword1234567890!",
+            "password": PASSWORD,
         },
     )
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Organization not found"
+    assert response.status_code == 401
+
+
+def test_employee_cannot_create_user(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    employee = create_test_user(role="employee")
+
+    response = client.post(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {employee['token']}"},
+        json={
+            "email": "new-employee@example.com",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_cannot_choose_another_organization(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, admin_organization_id = admin_headers(create_test_user)
+    other_user = create_test_user(role="employee")
+
+    response = client.post(
+        "/api/v1/users",
+        headers=headers,
+        json={
+            "email": "cross-tenant@example.com",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["organization_id"] == admin_organization_id
+    assert response.json()["organization_id"] != other_user["organization_id"]
+
+
+def test_create_user_uses_admin_organization(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, organization_id = admin_headers(create_test_user)
+
+    response = client.post(
+        "/api/v1/users",
+        headers=headers,
+        json={
+            "email": "admin-org@example.com",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["organization_id"] == organization_id
 
 
 def test_duplicate_email_in_same_organization_returns_409(
     client: TestClient,
+    create_test_user,
 ) -> None:
-    organization_id = create_organization(client)
+    headers, _ = admin_headers(create_test_user)
     payload = {
-        "organization_id": organization_id,
-        "email": "alice@example.com",
-        "password": "StrongPassword1234567890!",
+        "email": "duplicate@example.com",
+        "password": PASSWORD,
     }
 
-    first_response = client.post("/api/v1/users", json=payload)
-    second_response = client.post("/api/v1/users", json=payload)
+    first_response = client.post("/api/v1/users", headers=headers, json=payload)
+    second_response = client.post("/api/v1/users", headers=headers, json=payload)
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
 
 
-def test_create_user_rejects_short_password(client: TestClient) -> None:
-    organization_id = create_organization(client)
+def test_create_user_rejects_short_password(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, _ = admin_headers(create_test_user)
 
     response = client.post(
         "/api/v1/users",
+        headers=headers,
         json={
-            "organization_id": organization_id,
-            "email": "alice@example.com",
+            "email": "short-password@example.com",
             "password": "short",
         },
     )
@@ -89,15 +146,18 @@ def test_create_user_rejects_short_password(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_create_user_rejects_invalid_email(client: TestClient) -> None:
-    organization_id = create_organization(client)
+def test_create_user_rejects_invalid_email(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, _ = admin_headers(create_test_user)
 
     response = client.post(
         "/api/v1/users",
+        headers=headers,
         json={
-            "organization_id": organization_id,
             "email": "not-an-email",
-            "password": "StrongPassword1234567890!",
+            "password": PASSWORD,
         },
     )
 
@@ -107,16 +167,17 @@ def test_create_user_rejects_invalid_email(client: TestClient) -> None:
 def test_user_password_is_hashed(
     client: TestClient,
     test_session_factory,
+    create_test_user,
 ) -> None:
-    organization_id = create_organization(client)
-    password = "StrongPassword1234567890!"
+    headers, _ = admin_headers(create_test_user)
+    email = "hashcheck@example.com"
 
     response = client.post(
         "/api/v1/users",
+        headers=headers,
         json={
-            "organization_id": organization_id,
-            "email": "hashcheck@example.com",
-            "password": password,
+            "email": email,
+            "password": PASSWORD,
         },
     )
 
@@ -127,13 +188,31 @@ def test_user_password_is_hashed(
     async def read_stored_hash() -> str:
         async with test_session_factory() as session:
             result = await session.execute(
-                select(User.password_hash).where(User.email == "hashcheck@example.com")
+                select(User.password_hash).where(User.email == email)
             )
-            stored_hash = result.scalar_one()
-            return stored_hash
+            return result.scalar_one()
 
     stored_hash = asyncio.run(read_stored_hash())
 
-    assert stored_hash != password
+    assert stored_hash != PASSWORD
     assert stored_hash.startswith("$argon2")
-    assert PasswordHash.recommended().verify(password, stored_hash)
+    assert PasswordHash.recommended().verify(PASSWORD, stored_hash)
+
+
+def test_create_user_rejects_client_supplied_organization_id(
+    client: TestClient,
+    create_test_user,
+) -> None:
+    headers, organization_id = admin_headers(create_test_user)
+
+    response = client.post(
+        "/api/v1/users",
+        headers=headers,
+        json={
+            "organization_id": organization_id,
+            "email": "client-org@example.com",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 422

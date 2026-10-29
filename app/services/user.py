@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,9 +12,11 @@ from app.schemas.user import UserCreate
 async def create_user(
     session: AsyncSession,
     user_data: UserCreate,
+    *,
+    organization_id: UUID,
 ) -> User:
     organization_result = await session.execute(
-        select(Organization).where(Organization.id == user_data.organization_id)
+        select(Organization).where(Organization.id == organization_id)
     )
     organization = organization_result.scalar_one_or_none()
 
@@ -20,7 +24,7 @@ async def create_user(
         raise ValueError("Organization not found")
 
     user = User(
-        organization_id=user_data.organization_id,
+        organization_id=organization_id,
         email=str(user_data.email).lower(),
         password_hash=hash_password(user_data.password),
     )
