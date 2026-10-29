@@ -34,13 +34,13 @@ def create_organization_and_login(
 
 def test_organization_detail_requires_authentication(
     client: TestClient,
+    test_session_factory,
 ) -> None:
-    organization_response = client.post(
-        "/api/v1/organizations",
-        json={"name": "Private Organization"},
+    organization_id, _ = create_organization_and_login(
+        test_session_factory,
+        "Private Organization",
+        "private-reader@example.com",
     )
-    assert organization_response.status_code == 201
-    organization_id = organization_response.json()["id"]
 
     response = client.get(f"/api/v1/organizations/{organization_id}")
 

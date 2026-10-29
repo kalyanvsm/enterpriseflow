@@ -35,17 +35,13 @@ def create_test_user(
     return asyncio.run(create())
 
 
-def test_create_organization(client: TestClient) -> None:
+def test_public_organization_creation_is_disabled(client: TestClient) -> None:
     response = client.post(
         "/api/v1/organizations",
         json={"name": "Acme Corporation"},
     )
 
-    assert response.status_code == 201
-    data = response.json()
-    assert data["name"] == "Acme Corporation"
-    assert "id" in data
-    assert "created_at" in data
+    assert response.status_code == 404
 
 
 def test_get_existing_organization(
@@ -83,25 +79,3 @@ def test_get_missing_organization_returns_404(
     )
 
     assert response.status_code == 404
-
-
-def test_create_organization_rejects_too_short_name(
-    client: TestClient,
-) -> None:
-    response = client.post(
-        "/api/v1/organizations",
-        json={"name": "A"},
-    )
-
-    assert response.status_code == 422
-
-
-def test_create_organization_rejects_missing_name(
-    client: TestClient,
-) -> None:
-    response = client.post(
-        "/api/v1/organizations",
-        json={},
-    )
-
-    assert response.status_code == 422

@@ -6,25 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.organization import OrganizationCreate, OrganizationResponse
-from app.services.organization import create_organization, get_organization
+from app.schemas.organization import OrganizationResponse
+from app.services.organization import get_organization
 
 router = APIRouter(
     prefix="/organizations",
     tags=["organizations"],
 )
-
-
-@router.post(
-    "",
-    response_model=OrganizationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_organization_endpoint(
-    organization_data: OrganizationCreate,
-    session: AsyncSession = Depends(get_db),
-) -> OrganizationResponse:
-    return await create_organization(session, organization_data)
 
 
 @router.get(
