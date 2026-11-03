@@ -1,0 +1,71 @@
+<div class="dashboard-welcome">
+  <div>
+    <span class="eyebrow">WORKSPACE OVERVIEW</span>
+    <h1>Welcome to EnterpriseFlow</h1>
+    <p>
+      Your workspace is ready. Here's where your workflow activity will appear.
+    </p>
+  </div>
+  <span class="workspace-status">
+    <span></span>
+    Connected
+  </span>
+</div>
+
+{% if error %}
+<div class="dashboard-error" role="alert">
+  {{ error }}
+</div>
+{% endif %}
+
+<div class="dashboard-stats">
+  <article class="stat-card">
+    <div class="stat-heading">
+      <span>Total requests</span>
+      <span class="stat-icon purple" aria-hidden="true">▤</span>
+    </div>
+    <p class="stat-value">{{ counts.total_requests }}</p>
+    <p class="stat-caption">All workflow requests</p>
+  </article>
+
+  <article class="stat-card">
+    <div class="stat-heading">
+      <span>Pending approvals</span>
+      <span class="stat-icon amber" aria-hidden="true">◷</span>
+    </div>
+    <p class="stat-value">{{ counts.pending_approvals }}</p>
+    <p class="stat-caption">Awaiting a decision</p>
+  </article>
+
+  <article class="stat-card">
+    <div class="stat-heading">
+      <span>Approved</span>
+      <span class="stat-icon green" aria-hidden="true">✓</span>
+    </div>
+    <p class="stat-value">{{ counts.approved_requests }}</p>
+    <p class="stat-caption">Successfully approved</p>
+  </article>
+</div>
+
+<section class="activity-panel">
+  <div class="activity-header">
+    <div>
+      <h2>Recent activity</h2>
+      <p>Keep track of changes across your workspace.</p>
+    </div>
+    <span class="activity-badge">Preview</span>
+  </div>
+
+  <div class="activity-empty">
+    <span class="empty-icon" aria-hidden="true">▤</span>
+    <h3>Your activity will appear here</h3>
+    <p>
+      Once recent activity is connected, you'll see submissions, decisions, and updates in this space.
+    </p>
+  </div>
+</section>
+
+<footer class="dashboard-footer">
+  EnterpriseFlow <span>•</span> Workflow approvals for modern organizations
+</footer>
+

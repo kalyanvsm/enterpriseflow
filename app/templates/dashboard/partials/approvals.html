@@ -1,0 +1,23 @@
+<section class="requests-page">
+  <div class="requests-page-heading">
+    <div>
+      <span class="eyebrow">WORKSPACE</span>
+      <h1>Approvals</h1>
+      <p>Review workflow requests awaiting a decision.</p>
+    </div>
+    <span class="requests-count">
+      {{ pending_requests|length }} pending
+    </span>
+  </div>
+
+  {% if not is_admin %}
+  <div class="dashboard-error" role="alert">
+    Your account does not have permission to approve or reject requests.
+  </div>
+  {% endif %}
+
+  <div id="approvals-list-container">
+    {% include "dashboard/partials/approvals_table.html" %}
+  </div>
+</section>
+

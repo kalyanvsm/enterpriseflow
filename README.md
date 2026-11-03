@@ -22,7 +22,8 @@ EnterpriseFlow provides a backend for managing organizational approval workflows
 | Area | Technologies |
 |---|---|
 | Language | Python 3.13 |
-| API | FastAPI, Uvicorn |
+| API & Web Framework | FastAPI, Uvicorn |
+| Frontend & UI | Jinja2 templates, HTMX, Vanilla CSS |
 | Validation and configuration | Pydantic, Pydantic Settings |
 | Database | PostgreSQL 16 |
 | Data access | SQLAlchemy async ORM, asyncpg |
@@ -68,6 +69,17 @@ enterpriseflow/
 │   ├── models/
 │   ├── schemas/
 │   ├── services/
+│   ├── static/
+│   │   ├── css/
+│   │   ├── images/
+│   │   └── js/
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── login.html
+│   │   └── dashboard/
+│   ├── ui/
+│   │   ├── dependencies.py
+│   │   └── routes.py
 │   ├── workers/
 │   └── main.py
 ├── migrations/

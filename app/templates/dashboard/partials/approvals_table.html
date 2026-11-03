@@ -1,0 +1,78 @@
+{% if error %}
+<div class="dashboard-error" role="alert">{{ error }}</div>
+{% endif %}
+
+{% if success %}
+<p class="form-success" role="status">{{ success }}</p>
+{% endif %}
+
+<section class="requests-panel">
+  <div class="activity-header">
+    <div>
+      <h2>Pending approvals</h2>
+      <p>Approve or reject requests submitted by your organization.</p>
+    </div>
+  </div>
+
+  {% if not pending_requests %}
+  <div class="requests-empty">
+    <span class="empty-icon" aria-hidden="true">✓</span>
+    <h2>All caught up</h2>
+    <p>There are no requests waiting for approval.</p>
+  </div>
+  {% else %}
+  <div class="requests-table-wrapper">
+    <table class="requests-table">
+      <thead>
+        <tr>
+          <th>Request</th>
+          <th>Description</th>
+          <th>Created</th>
+          <th>Decision</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for req in pending_requests %}
+        <tr>
+          <td>
+            <strong>{{ req.title }}</strong>
+            <span class="request-id">{{ req.id|string|truncate(8, True, '') }}</span>
+          </td>
+          <td class="request-description">{{ req.description }}</td>
+          <td>{{ req.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if is_admin %}
+            <div class="approval-actions">
+              <button
+                class="approval-button approve-button"
+                type="button"
+                hx-post="/dashboard/requests/{{ req.id }}/approve"
+                hx-target="#approvals-list-container"
+                hx-swap="innerHTML"
+              >
+                Approve
+              </button>
+              <button
+                class="approval-button reject-button"
+                type="button"
+                hx-post="/dashboard/requests/{{ req.id }}/reject"
+                hx-target="#approvals-list-container"
+                hx-swap="innerHTML"
+              >
+                Reject
+              </button>
+            </div>
+            {% else %}
+            <span class="status-pill status-pending">
+              Pending
+            </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+

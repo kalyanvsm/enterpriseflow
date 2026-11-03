@@ -1,0 +1,69 @@
+{% if error %}
+<div class="dashboard-error" role="alert">{{ error }}</div>
+{% endif %}
+
+{% if success %}
+<p class="form-success" role="status">{{ success }}</p>
+{% endif %}
+
+<section class="requests-panel">
+  <div class="activity-header">
+    <div>
+      <h2>All requests</h2>
+      <p>Your most recent workflow requests.</p>
+    </div>
+  </div>
+
+  {% if not requests %}
+  <div class="requests-empty">
+    <span class="empty-icon" aria-hidden="true">▤</span>
+    <h2>No requests yet</h2>
+    <p>Create your first draft using the form above.</p>
+  </div>
+  {% else %}
+  <div class="requests-table-wrapper">
+    <table class="requests-table">
+      <thead>
+        <tr>
+          <th>Request</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for req in requests %}
+        <tr>
+          <td>
+            <strong>{{ req.title }}</strong>
+            <span class="request-id">{{ req.id|string|truncate(8, True, '') }}</span>
+          </td>
+          <td class="request-description">{{ req.description }}</td>
+          <td>
+            <span class="status-pill status-{{ req.status }}">
+              {{ req.status }}
+            </span>
+          </td>
+          <td>{{ req.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if req.status == 'draft' %}
+            <button
+              class="request-action-button"
+              type="button"
+              hx-post="/dashboard/requests/{{ req.id }}/submit"
+              hx-target="#requests-list-container"
+              hx-swap="innerHTML"
+            >
+              Submit for approval
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if active_tab == 'requests' %}Workflow Requests - EnterpriseFlow
+{% elif active_tab == 'approvals' %}Approvals - EnterpriseFlow
+{% else %}Workspace Overview - EnterpriseFlow
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<main class="dashboard-layout">
+  <aside class="dashboard-sidebar">
+    <a class="brand dashboard-brand" href="/" aria-label="EnterpriseFlow">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+      <span>Enterprise<span class="brand-accent">Flow</span></span>
+    </a>
+
+    <p class="sidebar-section-label">WORKSPACE</p>
+
+    <nav class="dashboard-nav" aria-label="Main navigation">
+      <button
+        id="nav-overview"
+        class="nav-item {% if active_tab == 'overview' %}active{% endif %}"
+        type="button"
+        hx-get="/dashboard/overview"
+        hx-target="#dashboard-main-content"
+        hx-swap="innerHTML"
+        hx-push-url="/dashboard?tab=overview"
+        onclick="setActiveNav(this, 'Overview')"
+      >
+        <span class="nav-icon" aria-hidden="true">◫</span>
+        Overview
+      </button>
+
+      <button
+        id="nav-requests"
+        class="nav-item {% if active_tab == 'requests' %}active{% endif %}"
+        type="button"
+        hx-get="/dashboard/requests"
+        hx-target="#dashboard-main-content"
+        hx-swap="innerHTML"
+        hx-push-url="/dashboard?tab=requests"
+        onclick="setActiveNav(this, 'Workflow requests')"
+      >
+        <span class="nav-icon" aria-hidden="true">▤</span>
+        Workflow requests
+      </button>
+
+      <button
+        id="nav-approvals"
+        class="nav-item {% if active_tab == 'approvals' %}active{% endif %}"
+        type="button"
+        hx-get="/dashboard/approvals"
+        hx-target="#dashboard-main-content"
+        hx-swap="innerHTML"
+        hx-push-url="/dashboard?tab=approvals"
+        onclick="setActiveNav(this, 'Approvals')"
+      >
+        <span class="nav-icon" aria-hidden="true">✓</span>
+        Approvals
+      </button>
+
+      <button class="nav-item" type="button" disabled>
+        <span class="nav-icon" aria-hidden="true">⚙</span>
+        Settings
+        <span class="nav-soon">Soon</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-help">
+        <span class="help-icon" aria-hidden="true">?</span>
+        <div>
+          <strong>Need help?</strong>
+          <p>More workspace tools coming soon.</p>
+        </div>
+      </div>
+
+      <a class="sidebar-logout" href="/logout">
+        <span aria-hidden="true">↪</span>
+        Sign out
+      </a>
+    </div>
+  </aside>
+
+  <section class="dashboard-main">
+    <header class="dashboard-topbar">
+      <div class="breadcrumb">
+        Workspace <span>/</span>
+        <strong id="breadcrumb-title">
+          {% if active_tab == 'requests' %}Workflow requests
+          {% elif active_tab == 'approvals' %}Approvals
+          {% else %}Overview
+          {% endif %}
+        </strong>
+      </div>
+
+      <div class="account-chip">
+        <span class="account-avatar" aria-hidden="true">
+          {{ user.email[0]|upper }}
+        </span>
+        <div class="account-details">
+          <strong>{{ user.email }}</strong>
+          <span>Signed in</span>
+        </div>
+        <a class="topbar-logout" href="/logout">
+          Sign out
+        </a>
+      </div>
+    </header>
+
+    <div id="dashboard-main-content" class="dashboard-content">
+      {% if active_tab == 'requests' %}
+        {% include "dashboard/partials/requests.html" %}
+      {% elif active_tab == 'approvals' %}
+        {% include "dashboard/partials/approvals.html" %}
+      {% else %}
+        {% include "dashboard/partials/overview.html" %}
+      {% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function setActiveNav(element, title) {
+    document.querySelectorAll('.dashboard-nav .nav-item').forEach(function(item) {
+      item.classList.remove('active');
+    });
+    element.classList.add('active');
+    const breadcrumb = document.getElementById('breadcrumb-title');
+    if (breadcrumb) {
+      breadcrumb.textContent = title;
+    }
+    document.title = title + ' - EnterpriseFlow';
+  }
+
+  window.addEventListener('popstate', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab') || 'overview';
+    const navBtn = document.getElementById('nav-' + tab);
+    if (navBtn) {
+      const titles = {
+        'overview': 'Overview',
+        'requests': 'Workflow requests',
+        'approvals': 'Approvals'
+      };
+      setActiveNav(navBtn, titles[tab] || 'Overview');
+    }
+  });
+</script>
+{% endblock %}
+

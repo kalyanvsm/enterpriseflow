@@ -1,0 +1,58 @@
+<section class="requests-page">
+  <div class="requests-page-heading">
+    <div>
+      <span class="eyebrow">WORKSPACE</span>
+      <h1>Workflow requests</h1>
+      <p>View and track requests across your organization.</p>
+    </div>
+    <span class="requests-count">
+      {{ requests|length }} {% if requests|length == 1 %}request{% else %}requests{% endif %}
+    </span>
+  </div>
+
+  <section class="requests-panel create-request-panel">
+    <h2>Create a workflow request</h2>
+    <p>Create a draft now; you can submit it for approval later.</p>
+
+    <form
+      class="request-form"
+      hx-post="/dashboard/requests"
+      hx-target="#requests-list-container"
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful) this.reset();"
+    >
+      <div class="field">
+        <label for="request-title">Title</label>
+        <input
+          id="request-title"
+          name="title"
+          minlength="3"
+          maxlength="200"
+          placeholder="e.g. New laptop request"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label for="request-description">Description</label>
+        <textarea
+          id="request-description"
+          name="description"
+          maxlength="10000"
+          rows="4"
+          placeholder="Explain the request and why it is needed..."
+          required
+        ></textarea>
+      </div>
+
+      <button class="submit-button" type="submit">
+        Create draft
+      </button>
+    </form>
+  </section>
+
+  <div id="requests-list-container">
+    {% include "dashboard/partials/requests_table.html" %}
+  </div>
+</section>
+
